@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# Lock using i3lock.
+
+# The lock wallpaper image.
+lock_image="lock.png"
+
+# The lock wallpaper directory.
+wallpaper_dir="${HOME}/.local/share/wallpapers"
+
+# run
+/usr/bin/i3lock --image "${wallpaper_dir}/${lock_image}" -e

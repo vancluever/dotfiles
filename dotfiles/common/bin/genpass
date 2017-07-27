@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+#
+# genpass just generates a random letter+number password of the length
+# specified in the first argument.
+import string, random, sys
+print(''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(int(sys.argv[1]))))

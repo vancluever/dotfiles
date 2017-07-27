@@ -1,0 +1,47 @@
+// vim:ts=4:sw=4:et
+{
+    // tabbed split container with 1 children
+    "border": "normal",
+    "floating": "auto_off",
+    "layout": "tabbed",
+    "percent": 0.5,
+    "type": "con",
+    "nodes": [
+        {
+            "border": "normal",
+            "current_border_width": 0,
+            "floating": "auto_off",
+            "percent": null,
+            "swallows": [
+               {
+                   "class": "^Termite$"
+               }
+            ],
+            "type": "con"
+        }
+    ]
+}
+
+{
+    // tabbed split container with 1 children
+    "border": "normal",
+    "floating": "auto_off",
+    "layout": "tabbed",
+    "percent": 0.5,
+    "type": "con",
+    "nodes": [
+        {
+            "border": "normal",
+            "current_border_width": 0,
+            "floating": "auto_off",
+            "percent": null,
+            "swallows": [
+               {
+                   "class": "^Chromium$"
+               }
+            ],
+            "type": "con"
+        }
+    ]
+}
+

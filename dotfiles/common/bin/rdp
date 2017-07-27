@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+# Run rdesktop with some specific options.
+
+/usr/bin/rdesktop -r clipboard:PRIMARYCLIPBOARD -g 90% "$@"

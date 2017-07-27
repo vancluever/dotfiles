@@ -1,0 +1,123 @@
+#!/bin/bash
+
+# Load devices. This script looks for 2 sinks defined in ~/.config/pulse/local_devices:
+#  * headphones=<device name of your headphones>
+#  * speakers=<device name of your speakers/line out>
+# You can get more info on this by running "pacmd list-sinks".
+
+declare -A pa_devices
+while read -r line; do
+  IFS="=" read -ra parts <<< "${line}"
+  pa_devices["${parts[0]}"]="${parts[*]:1}"
+done < "${HOME}/.config/pulse/local_devices"
+
+if [[ -z "${pa_devices[headphones]}" ]]; then
+  echo "please define your headphones device in ~/.config/pulse/local_devices"
+  exit 127
+fi
+
+if [[ -z "${pa_devices[speakers]}" ]]; then
+  echo "please define your speakers device in ~/.config/pulse/local_devices"
+  exit 127
+fi
+
+# The mixer real-time signal. This will signal to the mixer to immediately
+# update its volume reading upon switching inputs via this block.
+mixer_signal="10"
+
+# exit_if_error exits with error 127, printing the error code given to it to
+# stderr if it is non-zero.
+exit_if_error() {
+  local source="$1"
+  local code="$2"
+  if [[ ${code} != "0" ]]; then
+    echo "${source} exited with error ${code}" >&2
+    exit 127
+  fi
+}
+
+# default_sink gets the default sink name.
+default_sink() {
+  local pacmd_out=""
+  pacmd_out=($(pacmd stat | grep 'Default sink name'))
+  exit_if_error "fetching default sink" "$?"
+  echo "${pacmd_out[-1]}"
+}
+
+# sink_id gets the sink ID for a specific name.
+sink_id() {
+  local name="$1"
+  pactl_out=($(pactl list short sinks | grep "${name}"))
+  exit_if_error "fetching sink ID" "$?"
+  echo "${pactl_out[0]}"
+}
+
+# format displays a symbol depending on the current default sink - headphones
+# or speakers.
+format() {
+  local sink_name=""
+  sink_name="$(default_sink)"
+  exit_if_error "default_sink" "$?"
+  if [[ "${sink_name}" == "${pa_devices[headphones]}" ]]; then
+    echo ""
+  else
+    echo ""
+  fi
+}
+
+# move_sink_inputs moves all the sinks that are set to the old input to the new
+# input.
+move_sink_inputs() {
+  local old="$1"
+  local new="$2"
+  local sink_inputs=""
+  sink_inputs=$(pactl list short sink-inputs | grep -E "^[0-9]{1,}[[:space:]]{1,}${old}" | awk '{print $1}')
+  exit_if_error "fetching sink inputs" "$?"
+  for input in ${sink_inputs}; do
+    pacmd move-sink-input "${input}" "${new}"
+    exit_if_error "pacmd move-sink-input" "$?"
+  done
+}
+
+# toggle_default switches the default between the headphone and speaker output.
+toggle_default() {
+  local current=""
+  local current_id=""
+  local new=""
+  local new_id=""
+  current="$(default_sink)"
+  exit_if_error "finding current input" "$?"
+  current_id="$(sink_id "${current}")"
+  exit_if_error "finding sink ID for current input" "$?"
+  case "${current}" in
+    "${pa_devices[headphones]}")
+      new="${pa_devices[speakers]}"
+      ;;
+    "${pa_devices[speakers]}")
+      new="${pa_devices[headphones]}"
+      ;;
+    *)
+      echo "could not determine input type for default input: ${current}" >&2
+      exit 127
+      ;;
+  esac
+  new_id="$(sink_id "${new}")"
+  exit_if_error "finding sink ID for new input" "$?"
+
+  pactl set-default-sink "${new}"
+  exit_if_error "pactl set-default-sink" "$?"
+
+  move_sink_inputs "${current_id}" "${new_id}"
+  exit_if_error "moving sink inputs to new output" "$?"
+
+  # Update the mixer's volume.
+  kill -s "RTMIN+${mixer_signal}" "$(pidof i3blocks)"
+}
+
+#------------------------------------------------------------------------
+
+case $BLOCK_BUTTON in
+  3) toggle_default ;;  # right click, toggle default
+esac
+
+format

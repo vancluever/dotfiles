@@ -1,0 +1,123 @@
+#!/bin/bash
+
+# Load devices. This script looks for 2 sinks defined in ~/.config/pulse/local_devices:
+#  * headset=<device name of your headset>
+#  * camera=<device name of your camera mic, or onboard mic for laptops>
+# You can get more info on this by running "pacmd list-sources".
+
+declare -A pa_devices
+while read -r line; do
+  IFS="=" read -ra parts <<< "${line}"
+  pa_devices["${parts[0]}"]="${parts[*]:1}"
+done < "${HOME}/.config/pulse/local_devices"
+
+if [[ -z "${pa_devices[headset]}" ]]; then
+  echo "please define your headset device in ~/.config/pulse/local_devices"
+  exit 127
+fi
+
+if [[ -z "${pa_devices[camera]}" ]]; then
+  echo "please define your camera device in ~/.config/pulse/local_devices"
+  exit 127
+fi
+
+# The mixer real-time signal. This will signal to the mixer to immediately
+# update its volume reading upon switching inputs via this block.
+mixer_signal="11"
+
+# exit_if_error exits with error 127, outputing the error code given to it to
+# stderr if it is non-zero.
+exit_if_error() {
+  local source="$1"
+  local code="$2"
+  if [[ ${code} != "0" ]]; then
+    echo "${source} exited with error ${code}" >&2
+    exit 127
+  fi
+}
+
+# default_source gets the default source name.
+default_source() {
+  local pacmd_out=""
+  pacmd_out=($(pacmd stat | grep 'Default source name'))
+  exit_if_error "fetching default source" "$?"
+  echo "${pacmd_out[-1]}"
+}
+
+# source_id gets the source ID for a specific name.
+source_id() {
+  local name="$1"
+  pactl_out=($(pactl list short sources | grep "${name}"))
+  exit_if_error "fetching source ID" "$?"
+  echo "${pactl_out[0]}"
+}
+
+# format displays a symbol depending on the current default source - headset or
+# camera.
+format() {
+  local source_name=""
+  source_name="$(default_source)"
+  exit_if_error "default_source" "$?"
+  if [[ "${source_name}" == "${pa_devices[headset]}" ]]; then
+    echo ""
+  else
+    echo ""
+  fi
+}
+
+# move_source_outputs moves all the outputs that are set to the old source to
+# the new source.
+move_source_outputs() {
+  local old="$1"
+  local new="$2"
+  local source_outputs=""
+  source_outputs=$(pactl list short source-outputs | grep -E "^[0-9]{1,}[[:space:]]{1,}${old}" | awk '{print $1}')
+  exit_if_error "fetching source outputs" "$?"
+  for input in ${source_outputs}; do
+    pacmd move-source-output "${input}" "${new}"
+    exit_if_error "pacmd move-source-output" "$?"
+  done
+}
+
+# toggle_default switches the default between the headset and camera source.
+toggle_default() {
+  local current=""
+  local current_id=""
+  local new=""
+  local new_id=""
+  current="$(default_source)"
+  exit_if_error "finding current source" "$?"
+  current_id="$(source_id "${current}")"
+  exit_if_error "finding source ID for current input" "$?"
+  case "${current}" in
+    "${pa_devices[headset]}")
+      new="${pa_devices[camera]}"
+      ;;
+    "${pa_devices[camera]}")
+      new="${pa_devices[headset]}"
+      ;;
+    *)
+      echo "could not determine source type for default source: ${current}" >&2
+      exit 127
+      ;;
+  esac
+  new_id="$(source_id "${new}")"
+  exit_if_error "finding ID for new source" "$?"
+
+  pactl set-default-source "${new}"
+  exit_if_error "pactl set-default-source" "$?"
+
+  move_source_outputs "${current_id}" "${new_id}"
+  exit_if_error "moving source outputs to new source" "$?"
+
+  # Update the mixer's volume.
+  kill -s "RTMIN+${mixer_signal}" "$(pidof i3blocks)"
+}
+
+#------------------------------------------------------------------------
+
+case $BLOCK_BUTTON in
+  3) toggle_default ;;  # right click, toggle default
+esac
+
+format

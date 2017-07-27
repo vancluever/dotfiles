@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+# passes is just an "alias" script to keepassx2 (so that it runs off of
+# dmenu/rofi).  This file used to load the database directly, but keepassx2
+# remembers your last database so this was kind of moot.
+#
+# I may just remove this script in the future.
+
+/usr/bin/keepassx2

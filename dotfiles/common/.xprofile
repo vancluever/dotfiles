@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#
+# .xprofile - loaded by X display managers (NOT startx).
+
+# load local bin if available
+if [ -d "${HOME}/bin" ]; then
+	export PATH="${HOME}/bin:${PATH}"
+fi
+
+# load ssh-agent
+eval "$(/usr/bin/ssh-agent -t 14400)"
+
+# ensure udiskie is loaded
+/usr/bin/udiskie &
+
+# xautolock
+/usr/bin/xautolock -time 10 -locker "${HOME}/bin/i3lockwrapper" -detectsleep &

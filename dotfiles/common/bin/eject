@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+# messge prints a message using the nagbar.
+message() {
+  __type=$1
+  __message=$2
+  __log=$3
+  if [ ! -z "${__log}" ]; then
+    /usr/bin/i3-nagbar -t "${__type}" -m "${__message}" -b "View status" "i3-sensible-editor - <<<\"${__log}\""
+  else
+    /usr/bin/i3-nagbar -t "${__type}" -m "${__message}"
+  fi
+}
+
+mount_point=$(findmnt --first-only --noheadings --output SOURCE "/run/media/${USER}/$1")
+if [ $? != "0" ]; then
+  message error "ERROR: Mount point for $1 not found."
+  exit 1
+fi
+
+output=$(udisksctl unmount -b "${mount_point}" 2>&1)
+if [ $? != "0" ]; then
+  message error "ERROR: Cannot eject ${mount_point}" "${output}"
+  exit 1
+fi
+
+message warning "Unmounted ${mount_point}."

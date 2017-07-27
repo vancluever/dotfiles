@@ -1,0 +1,13 @@
+[Unit]
+Description=User-level backup job for restic
+
+[Service]
+Type=simple
+SyslogIdentifier=restic
+ExecStart=/usr/bin/sudo /usr/bin/restic backup \
+ -r "${HOME}/.restic.repository" \
+ -p "${HOME}/.restic.passwd" \
+ "/etc" "${HOME}"
+
+[Install]
+WantedBy=default.target
