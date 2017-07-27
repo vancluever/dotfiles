@@ -8,6 +8,7 @@ bin/i3lockwrapper
 
 .config/nitrogen/nitrogen.cfg
 .config/nitrogen/bg-saved.cfg
+.local/share/wallpapers/bg.png
 
 .config/rofi/config
 
