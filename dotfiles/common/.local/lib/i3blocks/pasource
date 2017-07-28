@@ -1,9 +1,43 @@
 #!/bin/bash
 
-# Load devices. This script looks for 2 sinks defined in ~/.config/pulse/local_devices:
+# This block allows you to control the volume of 2 named PA sinks (audio
+# outputs): normally your headphones or speakers.
+#
+# This script looks for 2 sinks defined in ~/.config/pulse/local_devices:
 #  * headset=<device name of your headset>
 #  * camera=<device name of your camera mic, or onboard mic for laptops>
 # You can get more info on this by running "pacmd list-sources".
+
+# log prints a message with an optional priority, which controls the color also
+# printed if a terminal is present. Messages always go to standard error.
+#
+# level is optional, and if not specified defaults to info.
+log() {
+  local message="$1"
+  local level="$2"
+  declare -A colors=(
+    ["error"]="31"   # red
+    ["warning"]="33" # yellow
+    ["ok"]="32"      # green
+    ["info"]="1"     # bold
+    ["reset"]="0"    # here just to note reset code
+  )
+  if [[ -z "${level}" ]] || [[ -z "${colors[$level]}" ]]; then
+    level="info"
+  fi
+  if [[ -t 1 ]]; then
+    echo -e "\e[${colors[$level]}m${message}\e[0m" 1>&2
+  else
+    echo "${message}" 1>&2
+  fi
+}
+
+# log_fatal is a "log MESSAGE error" followed by an "exit 1".
+log_fatal() {
+  local message="$1"
+  log "${message}" error
+  exit 1
+}
 
 declare -A pa_devices
 while read -r line; do
@@ -12,43 +46,32 @@ while read -r line; do
 done < "${HOME}/.config/pulse/local_devices"
 
 if [[ -z "${pa_devices[headset]}" ]]; then
-  echo "please define your headset device in ~/.config/pulse/local_devices"
-  exit 127
+  log_fatal "fatal: please define your headset device in ~/.config/pulse/local_devices"
 fi
 
 if [[ -z "${pa_devices[camera]}" ]]; then
-  echo "please define your camera device in ~/.config/pulse/local_devices"
-  exit 127
+  log_fatal "fatal: please define your camera device in ~/.config/pulse/local_devices"
 fi
 
 # The mixer real-time signal. This will signal to the mixer to immediately
 # update its volume reading upon switching inputs via this block.
 mixer_signal="11"
 
-# exit_if_error exits with error 127, outputing the error code given to it to
-# stderr if it is non-zero.
-exit_if_error() {
-  local source="$1"
-  local code="$2"
-  if [[ ${code} != "0" ]]; then
-    echo "${source} exited with error ${code}" >&2
-    exit 127
-  fi
-}
-
 # default_source gets the default source name.
 default_source() {
   local pacmd_out=""
-  pacmd_out=($(pacmd stat | grep 'Default source name'))
-  exit_if_error "fetching default source" "$?"
+  if ! pacmd_out=($(pacmd stat | grep 'Default source name')); then
+    return 1
+  fi
   echo "${pacmd_out[-1]}"
 }
 
 # source_id gets the source ID for a specific name.
 source_id() {
   local name="$1"
-  pactl_out=($(pactl list short sources | grep "${name}"))
-  exit_if_error "fetching source ID" "$?"
+  if ! pactl_out=($(pactl list short sources | grep "${name}")); then
+    return 1
+  fi
   echo "${pactl_out[0]}"
 }
 
@@ -56,8 +79,9 @@ source_id() {
 # camera.
 format() {
   local source_name=""
-  source_name="$(default_source)"
-  exit_if_error "default_source" "$?"
+  if ! source_name="$(default_source)"; then
+    return 1
+  fi
   if [[ "${source_name}" == "${pa_devices[headset]}" ]]; then
     echo ""
   else
@@ -71,11 +95,13 @@ move_source_outputs() {
   local old="$1"
   local new="$2"
   local source_outputs=""
-  source_outputs=$(pactl list short source-outputs | grep -E "^[0-9]{1,}[[:space:]]{1,}${old}" | awk '{print $1}')
-  exit_if_error "fetching source outputs" "$?"
+  if ! source_outputs=$(pactl list short source-outputs | grep -E "^[0-9]{1,}[[:space:]]{1,}${old}" | awk '{print $1}'); then
+    return 1
+  fi
   for input in ${source_outputs}; do
-    pacmd move-source-output "${input}" "${new}"
-    exit_if_error "pacmd move-source-output" "$?"
+    if ! pacmd move-source-output "${input}" "${new}"; then
+      return 1
+    fi
   done
 }
 
@@ -85,10 +111,12 @@ toggle_default() {
   local current_id=""
   local new=""
   local new_id=""
-  current="$(default_source)"
-  exit_if_error "finding current source" "$?"
-  current_id="$(source_id "${current}")"
-  exit_if_error "finding source ID for current input" "$?"
+  if ! current="$(default_source)"; then
+    log_fatal "fatal: error finding current source"
+  fi
+  if ! current_id="$(source_id "${current}")"; then
+    log_fatal "fatal: error finding source ID for current input"
+  fi
   case "${current}" in
     "${pa_devices[headset]}")
       new="${pa_devices[camera]}"
@@ -97,18 +125,18 @@ toggle_default() {
       new="${pa_devices[headset]}"
       ;;
     *)
-      echo "could not determine source type for default source: ${current}" >&2
-      exit 127
+      log_fatal "fatal: could not determine source type for default source: ${current}"
       ;;
   esac
-  new_id="$(source_id "${new}")"
-  exit_if_error "finding ID for new source" "$?"
-
-  pactl set-default-source "${new}"
-  exit_if_error "pactl set-default-source" "$?"
-
-  move_source_outputs "${current_id}" "${new_id}"
-  exit_if_error "moving source outputs to new source" "$?"
+  if ! new_id="$(source_id "${new}")"; then
+    log_fatal "fatal: error finding ID for new source" "$?"
+  fi
+  if ! pactl set-default-source "${new}"; then
+    log_fatal "fatal: error running pactl set-default-source"
+  fi
+  if ! move_source_outputs "${current_id}" "${new_id}"; then
+    log_fatal "fatal: error moving source outputs to new source"
+  fi
 
   # Update the mixer's volume.
   kill -s "RTMIN+${mixer_signal}" "$(pidof i3blocks)"
@@ -120,4 +148,6 @@ case $BLOCK_BUTTON in
   3) toggle_default ;;  # right click, toggle default
 esac
 
-format
+if ! format; then
+  log_fatal "fatal: error rendering block"
+fi

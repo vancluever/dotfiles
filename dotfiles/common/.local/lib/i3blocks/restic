@@ -3,15 +3,35 @@
 # The time to warn when there hasn't been a backup in a while, in seconds.
 warn_no_backup="86400"
 
-# exit_if_error exits with error 127, printing the error code given to it to
-# stderr if it is non-zero.
-exit_if_error() {
-  local source="$1"
-  local code="$2"
-  if [[ ${code} != "0" ]]; then
-    echo "${source} exited with error ${code}" >&2
-    exit 127
+# log prints a message with an optional priority, which controls the color also
+# printed if a terminal is present. Messages always go to standard error.
+#
+# level is optional, and if not specified defaults to info.
+log() {
+  local message="$1"
+  local level="$2"
+  declare -A colors=(
+    ["error"]="31"   # red
+    ["warning"]="33" # yellow
+    ["ok"]="32"      # green
+    ["info"]="1"     # bold
+    ["reset"]="0"    # here just to note reset code
+  )
+  if [[ -z "${level}" ]] || [[ -z "${colors[$level]}" ]]; then
+    level="info"
   fi
+  if [[ -t 1 ]]; then
+    echo -e "\e[${colors[$level]}m${message}\e[0m" 1>&2
+  else
+    echo "${message}" 1>&2
+  fi
+}
+
+# log_fatal is a "log MESSAGE error" followed by an "exit 1".
+log_fatal() {
+  local message="$1"
+  log "${message}" error
+  exit 1
 }
 
 # load_status returns the LoadState of the restic unit. This is to make sure
@@ -19,8 +39,9 @@ exit_if_error() {
 # even if the unit does not exist.
 load_status() {
   local systemctl_out=""
-  systemctl_out=$(systemctl --user --property=LoadState show restic.service)
-  exit_if_error "systemctl" "$?"
+  if ! systemctl_out="$(systemctl --user --property=LoadState show restic.service)"; then 
+    return 1
+  fi
   IFS="=" read -r -a load_status <<< "${systemctl_out}"
   echo "${load_status[1]}"
 }
@@ -29,15 +50,17 @@ load_status() {
 restic_status() {
   # chain in load_status, just in case the unit has not been found.
   local load_status_out=""
-  load_status_out="$(load_status)"
-  exit_if_error "checking load status" "$?"
+  if ! load_status_out="$(load_status)"; then
+    return 1
+  fi
   if [[ "${load_status_out}" == "not-found" ]]; then
     echo "${load_status_out}"
     return
   fi
   local systemctl_out=""
-  systemctl_out=$(systemctl --user --property=ActiveState show restic.service)
-  exit_if_error "systemctl" "$?"
+  if ! systemctl_out="$(systemctl --user --property=ActiveState show restic.service)"; then
+    return 1
+  fi
   IFS="=" read -r -a active_state <<< "${systemctl_out}"
   echo "${active_state[1]}"
 }
@@ -46,8 +69,9 @@ restic_status() {
 # of the time of day.
 format_hourglass() {
   local mod=""
-  mod=$(( $(date +%s) % 3 ))
-  exit_if_error "fetching system date" "$?"
+  if ! mod=$(( $(date +%s) % 3 )); then
+    return 1
+  fi
   case "${mod}" in
     "0")
       echo ""
@@ -71,17 +95,20 @@ format_check_ok() {
   local systemctl_out=""
   local exit_timestamp_unix=""
   local current_timestamp_unix=""
-  systemctl_out=$(systemctl --user --property=ExecMainExitTimestamp show restic.service)
-  exit_if_error "systemctl" "$?"
+  if ! systemctl_out="$(systemctl --user --property=ExecMainExitTimestamp show restic.service)"; then
+    return 1
+  fi
   IFS="=" read -r -a exit_timestamp <<< "${systemctl_out}"
   if [[ -z "${exit_timestamp[1]}" ]]; then
     exit_timestamp_unix="0"
   else
-    exit_timestamp_unix="$(date +%s --date="${exit_timestamp[1]}")"
+    if ! exit_timestamp_unix="$(date +%s --date="${exit_timestamp[1]}")"; then
+      return 1
+    fi
   fi
-  exit_if_error "converting datestamp to unix time" "$?"
-  current_timestamp_unix="$(date +%s)"
-  exit_if_error "getting current UNIX time" "$?"
+  if ! current_timestamp_unix="$(date +%s)"; then
+    return 1
+  fi
   if (( current_timestamp_unix - warn_no_backup > exit_timestamp_unix )); then
     echo -e "\n\n#ffa500"
   else
@@ -98,13 +125,15 @@ format_check_ok() {
 format() {
   local out=""
   local status=""
-  status="$(restic_status)"
-  exit_if_error "restic_status" "$?"
+  if ! status="$(restic_status)"; then
+    return 1
+  fi
   case "${status}" in
     "active")
       # Backup job is running, but we want to display a fancy animated icon.
-      out="$(format_hourglass)"
-      exit_if_error "fetching in-progress animation" "$?"
+      if ! out="$(format_hourglass)"; then
+        return 1
+      fi
       echo "${out}"
       ;;
     "failed")
@@ -113,8 +142,9 @@ format() {
       ;;
     "inactive")
       # Just check to see if the job has run recently
-      out="$(format_check_ok)"
-      exit_if_error "checking for OK status" "$?"
+      if ! out="$(format_check_ok)"; then
+        return 1
+      fi
       echo "${out}"
       ;;
     *)
@@ -128,12 +158,17 @@ case $BLOCK_BUTTON in
     i3-msg 'exec --no-startup-id i3-sensible-terminal --title "Restic Status" -e "systemctl --user status restic.service"' >/dev/null
     ;;
   "3")
-    status="$(restic_status)"
-    exit_if_error "restic_status" "$?"
+    if ! status="$(restic_status)"; then
+      log_fatal "fatal: error checking restic status"
+    fi
     if [[ "${status}" != "active" ]]; then
-      systemctl --user start restic.service
+      if ! systemctl --user start restic.service; then
+        log_fatal "fatal: error starting restic.service user service to run backup"
+      fi
     fi
     ;;
 esac
 
-format
+if ! format; then
+  log_fatal "fatal: error rendering block"
+fi
