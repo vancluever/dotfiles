@@ -36,3 +36,7 @@ bin/rdp
 .bash.local/neovim.profile
 .bash.local/pacman.profile
 .bash.local/ruby.profile
+
+.config/termite/config
+
+.config/dunst/dunstrc
