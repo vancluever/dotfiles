@@ -144,7 +144,7 @@ bar {
 bindsym $mod+l exec bin/i3lockwrapper
 
 # Pre-load stuff.
-exec --no-startup-id 'cd "${HOME}" && nitrogen --restore'
+exec --no-startup-id "cd \"${HOME}\" && nitrogen --restore"
 
 # Compton has to be loaded here on a sleep, just enough to ensure i3 has a
 # chance to load the layout. This is to prevent races where it seems that the
