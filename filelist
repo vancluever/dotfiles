@@ -40,3 +40,6 @@ bin/rdp
 .config/termite/config
 
 .config/dunst/dunstrc
+
+.config/systemd/user/ssh-agent.service
+.pam_environment

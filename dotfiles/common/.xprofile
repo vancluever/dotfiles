@@ -7,9 +7,6 @@ if [ -d "${HOME}/bin" ]; then
 	export PATH="${HOME}/bin:${PATH}"
 fi
 
-# load ssh-agent
-eval "$(/usr/bin/ssh-agent -t 14400)"
-
 # ensure udiskie is loaded
 /usr/bin/udiskie &
 
