@@ -149,4 +149,4 @@ exec --no-startup-id 'cd "${HOME}" && nitrogen --restore'
 # Compton has to be loaded here on a sleep, just enough to ensure i3 has a
 # chance to load the layout. This is to prevent races where it seems that the
 # layout is launched too early for Compton to see the windows that are loaded.
-exec --no-startup-id "sleep 8 && compton --shadow-opacity=0 --backend glx --vsync opengl-swc"
+exec --no-startup-id "sleep 8 && compton --shadow-opacity=0 --backend glx --vsync opengl-swc --xrender-sync --xrender-sync-fence"
