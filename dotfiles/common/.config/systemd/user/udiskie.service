@@ -1,0 +1,10 @@
+[Unit]
+Description=udiskie removable media automounter
+
+[Service]
+Type=simple
+SyslogIdentifier=udiskie
+ExecStart=/usr/bin/udiskie
+
+[Install]
+WantedBy=default.target

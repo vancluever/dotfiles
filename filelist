@@ -44,3 +44,5 @@ bin/rdp
 .config/systemd/user/ssh-agent.service
 .pam_environment
 .ssh/config
+
+.config/systemd/user/udiskie.service
