@@ -20,6 +20,6 @@ fi
 
 # load local aliases, functions, and profiles
 # shellcheck disable=SC1090
-for include_file in ${HOME}/.bash.local/*.{functions,profile}; do
+for include_file in ${HOME}/.bash.local/*.profile; do
 	source "${include_file}"
 done
