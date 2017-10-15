@@ -46,3 +46,5 @@ bin/rdp
 .ssh/config
 
 .config/systemd/user/udiskie.service
+
+.config/fontconfig/fonts.conf
