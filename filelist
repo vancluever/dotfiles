@@ -3,16 +3,16 @@
 .config/i3/config
 .config/i3/workspace1.layout
 
-bin/i3lockwrapper
+bin/i3lockwrapper:desktop
 .local/share/wallpapers/lock.png
 
-.config/nitrogen/nitrogen.cfg
-.config/nitrogen/bg-saved.cfg
+.config/nitrogen/nitrogen.cfg:desktop
+.config/nitrogen/bg-saved.cfg:desktop
 .local/share/wallpapers/bg.png
 
 .config/rofi/config
 
-.xprofile
+.xprofile:desktop
 
 .config/i3blocks/config
 .local/lib/i3blocks/paout
